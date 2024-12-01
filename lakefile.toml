@@ -1,0 +1,10 @@
+name = "ltlc"
+version = "0.1.0"
+defaultTargets = ["ltlc"]
+
+[[lean_lib]]
+name = "Ltlc"
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
