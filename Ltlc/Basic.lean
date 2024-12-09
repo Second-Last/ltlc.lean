@@ -8,18 +8,12 @@ open Mathlib
 inductive LtlcType
   | base : LtlcType -- base type
   | arrow : LtlcType → LtlcType → LtlcType -- arrows/functions
-  | prod : LtlcType → LtlcType → LtlcType -- (tensor) products
-  | sum : LtlcType → LtlcType → LtlcType -- sum types
   deriving Repr, BEq
 
 inductive LtlcTerm 
   | var : String → LtlcTerm
   | lam : String → LtlcType → LtlcTerm → LtlcTerm
   | app : LtlcTerm → LtlcTerm → LtlcTerm
-  | left : LtlcTerm → LtlcTerm 
-  | right : LtlcTerm → LtlcTerm 
-  | both : LtlcTerm → LtlcTerm → LtlcTerm
-  | case : LtlcTerm → String → LtlcTerm → String → LtlcTerm → LtlcTerm
   deriving Repr, BEq
 
 def Context := AssocList String LtlcType
@@ -35,31 +29,51 @@ inductive HasType : Context → LtlcTerm → LtlcType → Prop
   | lam 
     {Γ x α β body}
     (x_fresh : x ∉ Γ)
-    (v_hastype : HasType (Γ.insert x t) body β)
+    (v_hastype : HasType (Γ.insert x α) body β)
     : HasType Γ (LtlcTerm.lam x α body) (.arrow α β)
   | app 
     {Γ₁ Γ₂ t u α β}
     (t_is_fn : HasType Γ₁ t (.arrow α β))
-    (u_is_n : HasType Γ₂ u α)
+    (u_is_α : HasType Γ₂ u α)
     : HasType (Γ₁ ++ Γ₂) (.app t u) β
-  | both 
-    {Γ₁ Γ₂ x y τ₁ τ₂}
-    (x_is_τ₁ : HasType Γ₁ x τ₁)
-    (y_is_τ₂ : HasType Γ₂ y τ₂)
-    : HasType (Γ₁ ++ Γ₂) (.both x y) (.prod τ₁ τ₂)
-  | inl
-    {Γ t τ₁ τ₂}
-    (t_is_τ₁ : HasType Γ t τ₁)
-    : HasType Γ (.left t) (.sum τ₁ τ₂)
-  | inr
-    {Γ t τ₁ τ₂}
-    (t_is_τ₁ : HasType Γ t τ₂)
-    : HasType Γ (.right t) (.sum τ₁ τ₂)
-  | case 
-    {Γ₁ Γ₂ t τ₁ τ₂ x₁ x₂ body₁ body₂ α}
-    (ht : HasType Γ₁ t (.sum τ₁ τ₂))
-    (hl : HasType (Γ₂.insert x₁ τ₁) body₁ α)
-    (hr : HasType (Γ₂.insert x₂ τ₂) body₂ α)
-    (x₁_fresh : x₁ ∉ Γ₂)
-    (x₂_fresh : x₂ ∉ Γ₂)
-    : HasType (Γ₁ ++ Γ₂) (.case t x₁ body₁ x₂ body₂) α
+
+def subst (x : String) (e : LtlcTerm) (a : LtlcTerm) : LtlcTerm := 
+  match e with 
+  | .var y => if y == x then a else .var y
+  | .lam y α d => if y == x then .lam y α d else .lam y α (subst x d a)
+  | .app f u => .app (subst x f a) (subst x u a)
+
+notation  "["x" // " a"] "e => subst x e a
+
+inductive Step : LtlcTerm → LtlcTerm → Prop 
+  | app_lam {x α e a} : Step (.app (.lam x α e) a) ([x // a] e)
+  | app_left {f₁ f₂ e} 
+    : Step f₁ f₂ → Step (.app f₁ e) (.app f₂ e)
+  | app_right {f e₁ e₂}
+    : Step e₁ e₂ → Step (.app f e₁) (.app f e₂)
+
+theorem subst_preserves_type {Γ₁ Γ₂ x α β e a} 
+  : HasType (Γ₁.insert x α) e β →
+    HasType Γ₂ a α →
+    HasType (Γ₁ ++ Γ₂) ([x // a] e) β := sorry
+
+theorem preservation {Γ τ e₁ e₂}
+  (e₁_is_τ : HasType Γ e₁ τ)
+  (e₁_steps_e₂ : Step e₁ e₂)
+  : HasType Γ e₂ τ := 
+    match e₁_steps_e₂ with 
+    | Step.app_left f₁_steps_f₂ => 
+        match e₁_is_τ with 
+        | HasType.app f₁_is_fn e_is_ty => 
+            HasType.app (preservation f₁_is_fn f₁_steps_f₂) e_is_ty
+    | Step.app_right u₁_steps_u₂ =>
+        match e₁_is_τ with 
+        | HasType.app f_is_fn u₁_is_ty => 
+            HasType.app f_is_fn (preservation u₁_is_ty u₁_steps_u₂)
+    | @Step.app_lam x α e a => 
+        match e₁_is_τ with 
+        | @HasType.app Γ₁ Γ₂ _ _ _ β f_is_fn a_is_α => 
+            match f_is_fn with 
+            | @HasType.lam _ _ _ _ _ x_fresh bty => 
+                subst_preserves_type bty a_is_α
+    
