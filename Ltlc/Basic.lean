@@ -18,18 +18,27 @@ inductive LtlcTerm
 
 def Context := AssocList String LtlcType
 
+instance : Membership String (AssocList String LtlcType) where
+  mem l x := l.contains x = true
+
 instance : Membership String Context where
   mem l x := l.contains x = true
 
+def context_append (x y : Context) : Context :=
+    match y with 
+    | .cons k v ys => context_append (AssocList.cons k v x) ys
+    | .nil => x
+
 instance : Append Context where
-  append x y := AssocList.foldl (λ l x t => l.insert x t) y x
+  append x y := context_append x y
+
 
 inductive HasType : Context → LtlcTerm → LtlcType → Prop
-  | var {x τ} : HasType (AssocList.empty.insert x τ) (.var x) τ
+  | var {x τ} : HasType (AssocList.cons x τ AssocList.empty) (.var x) τ
   | lam 
     {Γ x α β body}
     (x_fresh : x ∉ Γ)
-    (v_hastype : HasType (Γ.insert x α) body β)
+    (v_hastype : HasType (AssocList.cons x α Γ) body β)
     : HasType Γ (LtlcTerm.lam x α body) (.arrow α β)
   | app 
     {Γ₁ Γ₂ t u α β}
@@ -37,6 +46,7 @@ inductive HasType : Context → LtlcTerm → LtlcType → Prop
     (u_is_α : HasType Γ₂ u α)
     : HasType (Γ₁ ++ Γ₂) (.app t u) β
 
+@[simp]
 def subst (x : String) (e : LtlcTerm) (a : LtlcTerm) : LtlcTerm := 
   match e with 
   | .var y => if y == x then a else .var y
@@ -53,9 +63,23 @@ inductive Step : LtlcTerm → LtlcTerm → Prop
     : Step e₁ e₂ → Step (.app f e₁) (.app f e₂)
 
 theorem subst_preserves_type {Γ₁ Γ₂ x α β e a} 
-  : HasType (Γ₁.insert x α) e β →
-    HasType Γ₂ a α →
-    HasType (Γ₁ ++ Γ₂) ([x // a] e) β := sorry
+  (p1 : HasType (Γ₁.cons x α) e β)
+  (p2 : HasType Γ₂ a α)
+  : HasType (Γ₁ ++ Γ₂) ([x // a] e) β :=  sorry
+    /- match p1 with  -/
+    /- | .var => _ -/
+    /- | .lam b x => _ -/
+    /- | @HasType.app a b c d e f g h => _ -/
+    /- match e with  -/
+    /- | .var y =>  -/
+    /-       /- by  -/ -/
+    /-       /-   by_cases heq : y = x  -/ -/
+    /-       /-   . simp [heq] -/ -/
+    /-       /-     _ -/ -/
+    /-       /-   . simp [heq] -/ -/
+    /-       /-     _ -/ -/
+    /- | .lam z γ b => _  -/
+    /- | .app f u => _ -/
 
 theorem preservation {Γ τ e₁ e₂}
   (e₁_is_τ : HasType Γ e₁ τ)
