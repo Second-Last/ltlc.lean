@@ -82,9 +82,6 @@ theorem subst_preserves_type {Γ₁ Γ₂ x α β e a}
   (p1 : HasType (.cons x α Γ₁) e β)
   (p2 : HasType Γ₂ a α)
   : HasType (Γ₁ ++ Γ₂) ([x // a] e) β :=
-    /- match p1 with  -/
-    /- | .lam b x => _ -/
-    /- | @HasType.app a b c d e f g h => _ -/
     match e with 
     | .var y => 
         by 
@@ -98,7 +95,22 @@ theorem subst_preserves_type {Γ₁ Γ₂ x α β e a}
           . simp [heq]
             cases p1 with
             | var => contradiction
-    | .lam z γ b => sorry
+    | .lam z γ d =>
+        by 
+          match p1 with 
+          | @HasType.lam _ _ _ β _ x_fresh d_hastype => 
+              simp
+              by_cases heq : z = x
+              -- `[x // a]λx.y` means the original expression is `λx.λx.y`,
+              -- which is clearly ill-typed because the outer `x` can never be
+              -- used in `y`!
+              · rw [heq] at x_fresh
+                have x_not_fresh : x ∈ AssocList.cons x α Γ₁ :=
+                  by 
+                    simp [Membership.mem, AssocList.contains]
+                contradiction
+              · simp [heq] 
+                sorry
     | .app f u => sorry
 
 -- theorem preservation {Γ τ e₁ e₂}
