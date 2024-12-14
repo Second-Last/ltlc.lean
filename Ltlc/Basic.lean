@@ -79,8 +79,8 @@ lemma cons_is_append_single {Γ : Context} {x : String} {α : LtlcType}
 lemma nil_append_is_same {Γ : Context} : AssocList.nil ++ Γ = Γ := sorry
 
 theorem subst_preserves_type {Γ x α β e a} 
-  /- (x_not_in_Γ₂ : x ∉ Γ₂) -/
-  (p1 : HasType (.cons x α Γ) e β)
+  (x_fresh : x ∉ Γ)
+  (p1 : (HasType (.cons x α Γ) e β) ∨ HasType Γ e β)
   (p2 : HasType .nil a α)
   : HasType Γ ([x // a] e) β :=
     match e with 
@@ -90,36 +90,77 @@ theorem subst_preserves_type {Γ x α β e a}
           . simp [heq]
             rw [heq] at p1 
             cases p1 with 
-            | var => 
-                exact p2
+            | inl pwx => 
+                cases pwx with
+                | var => exact p2
+            | inr pwox =>
+                cases pwox with 
+                | var => 
+                    have x_not_fresh : x ∈ AssocList.cons x β AssocList.nil := 
+                      by
+                        simp [Membership.mem, AssocList.contains]
+                    contradiction
           . simp [heq]
             cases p1 with
-            | var => contradiction
+            | inl pwx => 
+                cases pwx with
+                | var => contradiction
+            | inr pwox =>
+                cases pwox with 
+                | var => exact HasType.var
     | .lam z γ d =>
         by 
-          match p1 with 
-          | @HasType.lam _ _ _ μ _ z_fresh d_hastype => 
-              simp
-              by_cases heq : z = x
-              -- `[x // a]λx.y` means the original expression is `λx.λx.y`,
-              -- which is clearly ill-typed because the outer `x` can never be
-              -- used in `y`!
-              · simp [heq]
-                rw [heq] at d_hastype
-                sorry
-              · simp [heq] 
-                apply HasType.lam 
-                · sorry
-                · show HasType (AssocList.cons z γ Γ) ([x // a] d) μ
-                  observe d2 : HasType (AssocList.cons z γ (AssocList.cons x α Γ)) d μ
-                  have d2_swapped : HasType (AssocList.cons x α (AssocList.cons z γ Γ)) d μ := sorry
-                  exact subst_preserves_type d2_swapped p2
+          cases p1 with
+          | inl pwx => 
+              match pwx with 
+              | @HasType.lam _ _ _ μ _ z_fresh d_hastype => 
+                  simp
+                  by_cases heq : z = x
+                  -- `[x // a]λx.y` means the original expression is `λx.λx.y`,
+                  -- which is clearly ill-typed because the outer `x` can never be
+                  -- used in `y`!
+                  · simp [heq]
+                    rw [heq] at d_hastype
+                    sorry
+                  · simp [heq] 
+                    apply HasType.lam 
+                    · sorry
+                    · show HasType (AssocList.cons z γ Γ) ([x // a] d) μ
+                      observe d2 : HasType (AssocList.cons z γ (AssocList.cons x α Γ)) d μ
+                      have d2_swapped : HasType (AssocList.cons x α (AssocList.cons z γ Γ)) d μ := sorry
+                      have x_still_fresh : x ∉ AssocList.cons z γ Γ := sorry
+                      exact subst_preserves_type x_still_fresh (Or.inl d2_swapped) p2
+          | inr pwox => 
+              match pwox with 
+              | @HasType.lam _ _ _ μ _ z_fresh d_hastype => 
+                  simp
+                  by_cases heq : z = x
+                  · simp [heq]
+                    rw [←heq]
+                    exact HasType.lam z_fresh d_hastype
+                  · simp [heq]
+                    apply HasType.lam z_fresh 
+                    have x_still_fresh : x ∉ AssocList.cons z γ Γ := sorry
+                    exact subst_preserves_type x_still_fresh (Or.inr d_hastype) p2
     | .app f u => 
         by
-          match p1 with 
-          | @HasType.app _ Γ₁ Γ₂ m n μ ν m_is_fn n_is_ν is_append => 
-              simp
-              _
+          cases p1 with
+          | inl pwx =>
+              match pwx with 
+              | @HasType.app _ Γ₁ Γ₂ m n μ ν m_is_fn n_is_ν is_append => 
+                  simp
+                  sorry
+          | inr pwox => 
+              match pwox with 
+              | @HasType.app _ Γ₁ Γ₂ m n μ ν m_is_fn n_is_ν is_append => 
+                  simp
+                  have x_fresh_in_Γ₁ : x ∉ Γ₁ := sorry
+                  have x_fresh_in_Γ₂ : x ∉ Γ₂ := sorry
+                  show HasType Γ (([x // a] m).app ([x // a] n)) ν
+                  apply HasType.app 
+                  · exact subst_preserves_type x_fresh_in_Γ₁ (Or.inr m_is_fn) p2
+                  · exact subst_preserves_type x_fresh_in_Γ₂ (Or.inr n_is_ν) p2
+                  · exact is_append
 
 -- theorem preservation {Γ τ e₁ e₂}
 --   (e₁_is_τ : HasType Γ e₁ τ)
@@ -221,6 +262,7 @@ theorem preservation {τ e₁ e₂}
                   have Γ₁_is_nil : Γ₁ = AssocList.nil := sorry
                   have Γ₂_is_nil : Γ₂ = AssocList.nil := sorry
                   rw [←Γ₁_is_nil]
-                  apply subst_preserves_type bty
-                  rw [←Γ₂_is_nil]
-                  exact a_is_α
+                  sorry
+                  /- apply subst_preserves_type bty -/
+                  /- rw [←Γ₂_is_nil] -/
+                  /- exact a_is_α -/
