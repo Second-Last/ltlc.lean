@@ -19,13 +19,28 @@ inductive LtlcTerm
 notation "Context" => AssocList String LtlcType
 
 instance : Membership String Context where
-  mem l x := l.contains x = true
+  mem l x := l.contains x
 
+def context_equivalent (a b : Context) : Prop := 
+  a.all (λ k v => b.find? k == Option.some v)
+  && b.all (λ k v => a.find? k == Option.some v)
+
+-- cons basically becomes `insert` for the sake of easier to use.
+@[simp]
 def context_append (x y : Context) : Context :=
     match y with 
     | .nil => x 
     | .cons k v ys => .cons k v (context_append x ys)
 
+instance : Setoid Context where 
+  r := context_equivalent
+  iseqv := {
+    refl := sorry
+    symm := sorry
+    trans := sorry
+  }
+
+@[simp]
 instance : Append Context where
   append x y := context_append x y
 
@@ -54,8 +69,12 @@ inductive HasType : Context → LtlcTerm → LtlcType → Prop
     {Γ₁ Γ₂ t u α β}
     (t_is_fn : HasType Γ₁ t (.arrow α β))
     (u_is_α : HasType Γ₂ u α)
-    (is_append : Γ = Γ₁ ++ Γ₂)
+    (is_append : Γ ≈ Γ₁ ++ Γ₂)
     : HasType Γ (.app t u) β
+
+-- The only `value` in lambda calculus is a lambda abstraction.
+def IsValue (t : LtlcTerm) : Prop
+  := ∃x, ∃α, ∃e, t = LtlcTerm.lam x α e
 
 @[simp]
 def subst (x : String) (e : LtlcTerm) (a : LtlcTerm) : LtlcTerm := 
@@ -73,12 +92,31 @@ inductive Step : LtlcTerm → LtlcTerm → Prop
   | app_right {f e₁ e₂}
     : Step e₁ e₂ → Step (.app f e₁) (.app f e₂)
 
+lemma equiv_context_replacable {Γ₁ Γ₂ : Context}
+  (t : HasType Γ₁ e α)
+  (Γ₁_equiv_Γ₂ : Γ₁ ≈ Γ₂)
+  : HasType Γ₂ e α := sorry
+
 lemma cons_is_append_single {Γ : Context} {x : String} {α : LtlcType}
   : AssocList.cons x α Γ = Γ ++ (AssocList.cons x α AssocList.nil) := rfl
 
+lemma both_nil_append_to_nil {Γ₁ Γ₂ : Context} :
+  AssocList.nil ≈ Γ₁ ++ Γ₂ 
+  → Γ₁ = AssocList.nil ∧ Γ₂ = AssocList.nil
+  := sorry
+
 lemma nil_append_is_same {Γ : Context} : AssocList.nil ++ Γ = Γ := sorry
 
-theorem subst_preserves_type {Γ x α β e a} 
+lemma lem1 {Γ Γ₁ Γ₂ : Context}
+  (x_fresh : x ∉ Γ)
+  (is_append : AssocList.cons x α Γ ≈ Γ₁ ++ Γ₂)
+  : (∃Γ₃, AssocList.cons x α Γ₃ ≈ Γ₁ ∧ x ∉ Γ₂)
+    ∨ (∃Γ₃, AssocList.cons x α Γ₃ ≈ Γ₂ ∨ x ∉ Γ₁) := sorry
+
+theorem extract_context {α : LtlcType} (Γ : Context) (x : String) (x_in_Γ : x ∈ Γ)
+  : ∃Γ', (.cons x α Γ') ≈ Γ := sorry
+
+theorem subst_lemma {Γ x α β e a} 
   (x_fresh : x ∉ Γ)
   (p1 : (HasType (.cons x α Γ) e β) ∨ HasType Γ e β)
   (p2 : HasType .nil a α)
@@ -129,7 +167,7 @@ theorem subst_preserves_type {Γ x α β e a}
                       observe d2 : HasType (AssocList.cons z γ (AssocList.cons x α Γ)) d μ
                       have d2_swapped : HasType (AssocList.cons x α (AssocList.cons z γ Γ)) d μ := sorry
                       have x_still_fresh : x ∉ AssocList.cons z γ Γ := sorry
-                      exact subst_preserves_type x_still_fresh (Or.inl d2_swapped) p2
+                      exact subst_lemma x_still_fresh (Or.inl d2_swapped) p2
           | inr pwox => 
               match pwox with 
               | @HasType.lam _ _ _ μ _ z_fresh d_hastype => 
@@ -141,7 +179,7 @@ theorem subst_preserves_type {Γ x α β e a}
                   · simp [heq]
                     apply HasType.lam z_fresh 
                     have x_still_fresh : x ∉ AssocList.cons z γ Γ := sorry
-                    exact subst_preserves_type x_still_fresh (Or.inr d_hastype) p2
+                    exact subst_lemma x_still_fresh (Or.inr d_hastype) p2
     | .app f u => 
         by
           cases p1 with
@@ -149,7 +187,24 @@ theorem subst_preserves_type {Γ x α β e a}
               match pwx with 
               | @HasType.app _ Γ₁ Γ₂ m n μ ν m_is_fn n_is_ν is_append => 
                   simp
-                  sorry
+                  have x_in_only_one := lem1 x_fresh is_append
+                  match x_in_only_one with 
+                  | .inl ⟨Γ₃, ⟨partof, x_fresh_in_Γ₂⟩⟩ => 
+                      /- let ⟨Γ₃, partof⟩ := @extract_context α Γ₁ x x_in_Γ₁ -/
+                      let m_still_fn : HasType Γ₃ ([x // a] m) (μ.arrow ν) :=
+                        by 
+                          have m_is_fn_with_Γ₃ := equiv_context_replacable m_is_fn (symm partof)
+                          exact subst_lemma x_fresh_in_Γ₃ (Or.inl m_is_fn_with_Γ₃) p2
+                      let n_still_ν : HasType Γ₂ ([x // a] n) μ := 
+                        by  
+                          exact subst_lemma x_fresh_in_Γ₂ (Or.inr n_is_ν) p2
+
+                      apply HasType.app 
+                      · exact m_still_fn
+                      · exact n_still_ν
+                      · sorry
+                  | .inr _ => sorry
+                  /- | .inr ⟨Γ₃, ⟨partof, x_fresh_in_Γ₂⟩⟩ => sorry -/
           | inr pwox => 
               match pwox with 
               | @HasType.app _ Γ₁ Γ₂ m n μ ν m_is_fn n_is_ν is_append => 
@@ -158,8 +213,8 @@ theorem subst_preserves_type {Γ x α β e a}
                   have x_fresh_in_Γ₂ : x ∉ Γ₂ := sorry
                   show HasType Γ (([x // a] m).app ([x // a] n)) ν
                   apply HasType.app 
-                  · exact subst_preserves_type x_fresh_in_Γ₁ (Or.inr m_is_fn) p2
-                  · exact subst_preserves_type x_fresh_in_Γ₂ (Or.inr n_is_ν) p2
+                  · exact subst_lemma x_fresh_in_Γ₁ (Or.inr m_is_fn) p2
+                  · exact subst_lemma x_fresh_in_Γ₂ (Or.inr n_is_ν) p2
                   · exact is_append
 
 -- theorem preservation {Γ τ e₁ e₂}
@@ -252,7 +307,7 @@ theorem preservation {τ e₁ e₂}
         match e₁_is_τ with 
         | @HasType.app _ Γ₁ Γ₂ _ _ _ β f_is_fn a_is_α Γ_is_Γ₁_append_Γ₂ => 
             match f_is_fn with 
-            | @HasType.lam _ _ _ _ _ _ bty => 
+            | @HasType.lam _ _ _ _ _ x_fresh_in_Γ₁ bty => 
                 by
                   -- have is_same : context_append Γ₁ AssocList.nil ++ Γ₂ = Γ :=
                   --   by
@@ -262,7 +317,40 @@ theorem preservation {τ e₁ e₂}
                   have Γ₁_is_nil : Γ₁ = AssocList.nil := sorry
                   have Γ₂_is_nil : Γ₂ = AssocList.nil := sorry
                   rw [←Γ₁_is_nil]
-                  sorry
-                  /- apply subst_preserves_type bty -/
-                  /- rw [←Γ₂_is_nil] -/
-                  /- exact a_is_α -/
+                  exact subst_lemma x_fresh_in_Γ₁ (Or.inl bty) (Γ₂_is_nil ▸ a_is_α)
+
+
+theorem progress
+  (t_is_τ : HasType AssocList.nil t τ)
+  : (∃t', Step t t') ∨ IsValue t :=
+  by 
+    match t_is_τ with 
+    | @HasType.lam _ x α β e x_fresh e_is_β_with_α => 
+        apply Or.inr 
+        apply Exists.intro x
+        apply Exists.intro α 
+        apply Exists.intro e 
+        trivial
+    | @HasType.app _ Γ₁ Γ₂ t u α β t_is_fn u_is_α is_append => 
+        apply Or.inl 
+        have ⟨Γ₁_is_nil, Γ₂_is_nil⟩ : Γ₁ = .nil ∧ Γ₂ = .nil := 
+          by exact both_nil_append_to_nil is_append
+        rw [Γ₁_is_nil] at t_is_fn
+        rw [Γ₂_is_nil] at u_is_α
+        match progress t_is_fn with
+        | .inl ⟨t', t_to_t'⟩ => 
+            apply Exists.intro (t'.app u)
+            exact Step.app_left t_to_t'
+        | .inr ⟨y, ⟨γ, ⟨d, issame⟩⟩⟩ =>
+            match progress u_is_α with 
+            | .inl ⟨u', u_to_u'⟩ =>
+                apply Exists.intro (t.app u')
+                exact Step.app_right u_to_u'
+            | .inr ucantstep => 
+                rw [issame]
+                apply Exists.intro ([y // u] d)
+                exact Step.app_lam
+
+
+
+
