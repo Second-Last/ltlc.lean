@@ -7,9 +7,26 @@ open Lean
 
 notation "Context" => AssocList String LtlcType
 
+inductive Bound : String → Context → Prop
+  | yochat x α c : Bound x (.cons x α c)
+  | brb x y β cs : ¬(x = y) → Bound x cs → Bound x (.cons y β cs)
+
 inductive InContext : String → LtlcType → Context → Prop 
   | aha x α c : InContext x α (.cons x α c)
   | hang_on x α y β cs : InContext x α cs → InContext x α (.cons y β cs)
+
+theorem incontext_is_bound 
+  (inctx : InContext x α Γ)
+  : Bound x Γ :=
+    match inctx with 
+    | .aha _ _ Γ' => Bound.yochat x α Γ'
+    | .hang_on _ _ y β Γ' inΓ' => 
+        by
+          by_cases hxy : x = y
+          · rw [hxy]
+            exact Bound.yochat y β Γ'
+          · apply Bound.brb x y β Γ' hxy
+            exact incontext_is_bound inΓ'
 
 def context_equivalent (a b : Context) : Prop := 
   (∀x, ∀α, InContext x α a → InContext x α b)
