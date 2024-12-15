@@ -1,6 +1,6 @@
 name = "ltlc"
 version = "0.1.0"
-defaultTargets = ["ltlc"]
+defaultTargets = ["Ltlc"]
 
 [[lean_lib]]
 name = "Ltlc"
