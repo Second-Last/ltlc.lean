@@ -30,72 +30,88 @@ open Lean
 -- 
 -- lemma cons_is_append_single {Γ : Context} {x : String} {α : LtlcType}
 --   : AssocList.cons x α Γ = Γ ++ (AssocList.cons x α AssocList.nil) := rfl
--- 
 
--- theorem subst_lemma {Γ x α β e a} 
---   (x_fresh : x ∉ Γ)
---   (p1 : (HasType (.cons x α Γ) e β) ∨ HasType Γ e β)
---   (p2 : HasType .nil a α)
---   : HasType Γ ([x // a] e) β :=
---     match e with 
---     | .var y => 
---         by 
---           by_cases heq : y = x 
---           . simp [heq]
---             rw [heq] at p1 
---             cases p1 with 
---             | inl pwx => 
---                 cases pwx with
---                 | var => exact p2
---             | inr pwox =>
---                 cases pwox with 
---                 | var => 
---                     have x_not_fresh : x ∈ AssocList.cons x β AssocList.nil := 
---                       by
---                         simp [Membership.mem, AssocList.contains]
---                     contradiction
---           . simp [heq]
---             cases p1 with
---             | inl pwx => 
---                 cases pwx with
---                 | var => contradiction
---             | inr pwox =>
---                 cases pwox with 
---                 | var => exact HasType.var
---     | .lam z γ d =>
---         by 
---           cases p1 with
---           | inl pwx => 
---               match pwx with 
---               | @HasType.lam _ _ _ μ _ z_fresh d_hastype => 
---                   simp
---                   by_cases heq : z = x
---                   -- `[x // a]λx.y` means the original expression is `λx.λx.y`,
---                   -- which is clearly ill-typed because the outer `x` can never be
---                   -- used in `y`!
---                   · simp [heq]
---                     rw [heq] at d_hastype
---                     sorry
---                   · simp [heq] 
---                     apply HasType.lam 
---                     · sorry
---                     · show HasType (AssocList.cons z γ Γ) ([x // a] d) μ
---                       observe d2 : HasType (AssocList.cons z γ (AssocList.cons x α Γ)) d μ
---                       have d2_swapped : HasType (AssocList.cons x α (AssocList.cons z γ Γ)) d μ := sorry
---                       have x_still_fresh : x ∉ AssocList.cons z γ Γ := sorry
---                       exact subst_lemma x_still_fresh (Or.inl d2_swapped) p2
---           | inr pwox => 
---               match pwox with 
---               | @HasType.lam _ _ _ μ _ z_fresh d_hastype => 
---                   simp
---                   by_cases heq : z = x
---                   · simp [heq]
---                     rw [←heq]
---                     exact HasType.lam z_fresh d_hastype
---                   · simp [heq]
---                     apply HasType.lam z_fresh 
---                     have x_still_fresh : x ∉ AssocList.cons z γ Γ := sorry
---                     exact subst_lemma x_still_fresh (Or.inr d_hastype) p2
+theorem subst_lemma {Γ x α β e a} 
+  (x_fresh : ¬Bound x Γ)
+  (p1 : (HasType (.cons x α Γ) e β) ∨ HasType Γ e β)
+  (p2 : HasType .nil a α)
+  : HasType Γ ([x // a] e) β :=
+     match e with 
+     | .var y => 
+         by 
+           by_cases heq : y = x 
+           . simp [heq]
+             rw [heq] at p1 
+             cases p1 with 
+             | inl pwx => 
+                 cases pwx with
+                 | var => exact p2
+             | inr pwox =>
+                 cases pwox with 
+                 | var => 
+                     have x_not_fresh : Bound x (AssocList.cons x β AssocList.nil) := 
+                       by
+                         exact Bound.yochat x β AssocList.nil
+                     contradiction
+           . simp [heq]
+             cases p1 with
+             | inl pwx => 
+                 cases pwx with
+                 | var => contradiction
+             | inr pwox =>
+                 cases pwox with 
+                 | var => exact HasType.var
+     | .lam z γ d =>
+         by 
+           cases p1 with
+           | inl pwx => 
+               match pwx with 
+               | @HasType.lam _ _ _ μ _ z_fresh d_hastype => 
+                   simp
+                   by_cases heq : z = x
+                   -- `[x // a]λx.y` means the original expression is `λx.λx.y`,
+                   -- which is clearly ill-typed because the outer `x` can never be
+                   -- used in `y`!
+                   · simp [heq]
+                     rw [heq] at d_hastype
+                     rw [←heq] at z_fresh
+                     have z_not_fresh : Bound z (AssocList.cons z α Γ) := Bound.yochat z α Γ
+                     contradiction
+                   · simp [heq] 
+                     apply HasType.lam 
+                     · intro z_not_fresh_in_Γ
+                       let z_not_fresh : Bound z (AssocList.cons x α Γ)
+                         := Bound.brb z x α Γ heq z_not_fresh_in_Γ
+                       contradiction
+                     · show HasType (AssocList.cons z γ Γ) ([x // a] d) μ
+                       observe d2 : HasType (AssocList.cons z γ (AssocList.cons x α Γ)) d μ
+                       have d2_swapped : HasType (AssocList.cons x α (AssocList.cons z γ Γ)) d μ 
+                        := sorry
+                       have x_still_fresh : ¬Bound x (AssocList.cons z γ Γ) := 
+                          by
+                            intro x_not_fresh_with_z
+                            cases x_not_fresh_with_z with 
+                            | yochat => contradiction
+                            | brb => contradiction
+                       exact subst_lemma x_still_fresh (Or.inl d2_swapped) p2
+           | inr pwox => 
+               match pwox with 
+               | @HasType.lam _ _ _ μ _ z_fresh d_hastype => 
+                   simp
+                   by_cases heq : z = x
+                   · simp [heq]
+                     rw [←heq]
+                     exact HasType.lam z_fresh d_hastype
+                   · simp [heq]
+                     apply HasType.lam z_fresh 
+                     have x_still_fresh : ¬Bound x (AssocList.cons z γ Γ) := 
+                      by 
+                        intro x_not_fresh_with_z
+                        cases x_not_fresh_with_z with
+                        | yochat => contradiction
+                        | brb => contradiction
+                     exact subst_lemma x_still_fresh (Or.inr d_hastype) p2
+      | _ => sorry
 --     | .app f u => 
 --         by
 --           cases p1 with
@@ -133,107 +149,34 @@ open Lean
 --                   · exact subst_lemma x_fresh_in_Γ₂ (Or.inr n_is_ν) p2
 --                   · exact is_append
 -- 
--- theorem preservation {τ e₁ e₂}
---   (e₁_is_τ : HasType .nil e₁ τ)
---   (e₁_steps_e₂ : Step e₁ e₂)
---   : HasType .nil e₂ τ := 
---     match e₁_steps_e₂ with 
---     | @Step.app_left f₁ f₂ e f₁_steps_f₂ => 
---         match e₁_is_τ with 
---         | @HasType.app _ Γ₁ Γ₂ _ _ α β f₁_is_fn e_is_ty nil_is_Γ₁_append_Γ₂ => 
---             by
---               have Γ₁_is_nil : Γ₁ = AssocList.nil := sorry
---               have Γ₂_is_nil : Γ₂ = AssocList.nil := sorry
---               rw [Γ₁_is_nil] at f₁_is_fn
---               rw [Γ₁_is_nil] at nil_is_Γ₁_append_Γ₂
---               exact HasType.app (preservation f₁_is_fn f₁_steps_f₂) e_is_ty nil_is_Γ₁_append_Γ₂
---     | @Step.app_right f u₁ u₂ u₁_steps_u₂ =>
---         match e₁_is_τ with 
---         | @HasType.app _ Γ₁ Γ₂ _ _ α β f_is_fn u₁_is_α nil_is_Γ₁_append_Γ₂ => 
---             by
---               have Γ₂_is_nil : Γ₂ = AssocList.nil := sorry
---               rw [Γ₂_is_nil] at u₁_is_α
---               rw [Γ₂_is_nil] at nil_is_Γ₁_append_Γ₂
---               exact HasType.app f_is_fn (preservation u₁_is_α u₁_steps_u₂) nil_is_Γ₁_append_Γ₂
---     | @Step.app_lam x α e a => 
---         match e₁_is_τ with 
---         | @HasType.app _ Γ₁ Γ₂ _ _ _ β f_is_fn a_is_α Γ_is_Γ₁_append_Γ₂ => 
---             match f_is_fn with 
---             | @HasType.lam _ _ _ _ _ x_fresh_in_Γ₁ bty => 
---                 by
---                   -- have is_same : context_append Γ₁ AssocList.nil ++ Γ₂ = Γ :=
---                   --   by
---                   --     simp [context_append]
---                   --     exact Eq.symm Γ_is_Γ₁_append_Γ₂
---                   -- rw [←is_same]
---                   have Γ₁_is_nil : Γ₁ = AssocList.nil := sorry
---                   have Γ₂_is_nil : Γ₂ = AssocList.nil := sorry
---                   rw [←Γ₁_is_nil]
---                   exact subst_lemma x_fresh_in_Γ₁ (Or.inl bty) (Γ₂_is_nil ▸ a_is_α)
--- 
--- 
--- 
--- -- theorem preservation {Γ τ e₁ e₂}
--- --   (e₁_is_τ : HasType Γ e₁ τ)
--- --   (e₁_steps_e₂ : Step e₁ e₂)
--- --   : HasType Γ e₂ τ := 
--- --     match e₁_steps_e₂ with 
--- --     | Step.app_left f₁_steps_f₂ => 
--- --         match e₁_is_τ with 
--- --         | HasType.app f₁_is_fn e_is_ty is_append => 
--- --             HasType.app (preservation f₁_is_fn f₁_steps_f₂) e_is_ty is_append
--- --     | Step.app_right u₁_steps_u₂ =>
--- --         match e₁_is_τ with 
--- --         | HasType.app f_is_fn u₁_is_ty is_append => 
--- --             HasType.app f_is_fn (preservation u₁_is_ty u₁_steps_u₂) is_append
--- --     | @Step.app_lam x α e a => 
--- --         match e₁_is_τ with 
--- --         | @HasType.app Γ Γ₁ Γ₂ _ _ _ β f_is_fn a_is_α is_append => 
--- --             match f_is_fn with 
--- --             | @HasType.lam _ _ _ _ _ bty _ => 
--- --                 by
--- --                   have is_same : context_append Γ₁ AssocList.nil ++ Γ₂ = Γ :=
--- --                     by
--- --                       simp [context_append]
--- --                       exact Eq.symm is_append
--- --                   rw [←is_same]
--- --                   _
--- 
--- -- lemma subst_lemma {x e a α β} 
--- --   (e_is_β_with_α : HasType (.cons x α .nil) e β )
--- --   (v_is_α : HasType .nil a α)
--- --   : HasType .nil ([x // a]e) β := 
--- --     match e with 
--- --     | .var y => 
--- --         by 
--- --           by_cases heq : y = x 
--- --           . simp [heq]
--- --             rw [heq] at e_is_β_with_α
--- --             cases e_is_β_with_α with 
--- --             | var => exact v_is_α
--- --           . simp [heq]
--- --             cases e_is_β_with_α with
--- --             | var => contradiction
--- --     | .lam z γ d => 
--- --         by
--- --           match e_is_β_with_α with 
--- --           | @HasType.lam _ _ _ μ _ z_fresh d_is_μ =>
--- --               simp 
--- --               by_cases heq : z = x 
--- --               -- `[x // a]λx.y` means the original expression is `λx.λx.y`,
--- --               -- which is clearly ill-typed because the outer `x` can never be
--- --               -- used in `y`!
--- --               · simp [heq]
--- --                 rw [heq] at d_is_μ 
--- --                 have z_not_fresh : z ∈ AssocList.cons x α AssocList.nil :=
--- --                   by 
--- --                     rw [heq]
--- --                     simp [Membership.mem, AssocList.contains]
--- --                 contradiction
--- --               · simp [heq]
--- --                 apply HasType.lam 
--- --                 · simp [Membership.mem, AssocList.contains]
--- --                 · rw [nil_append_is_same]
--- --                   _
--- --     | _ => sorry
 
+theorem preservation {τ e₁ e₂}
+  (e₁_is_τ : HasType .nil e₁ τ)
+  (e₁_steps_e₂ : Step e₁ e₂)
+  : HasType .nil e₂ τ := 
+    match e₁_steps_e₂ with 
+    | @Step.app_left f₁ f₂ e f₁_steps_f₂ => 
+        match e₁_is_τ with 
+        | @HasType.app _ Γ₁ Γ₂ _ _ α β f₁_is_fn e_is_ty nil_is_Γ₁_append_Γ₂ => 
+            by
+              let ⟨Γ₁_is_nil, Γ₂_is_nil⟩ := nil_append_nil_nil nil_is_Γ₁_append_Γ₂
+              rw [Γ₁_is_nil] at f₁_is_fn
+              rw [Γ₁_is_nil] at nil_is_Γ₁_append_Γ₂
+              exact HasType.app (preservation f₁_is_fn f₁_steps_f₂) e_is_ty nil_is_Γ₁_append_Γ₂
+    | @Step.app_right f u₁ u₂ u₁_steps_u₂ =>
+        match e₁_is_τ with 
+        | @HasType.app _ Γ₁ Γ₂ _ _ α β f_is_fn u₁_is_α nil_is_Γ₁_append_Γ₂ => 
+            by
+              let ⟨_, Γ₂_is_nil⟩ := nil_append_nil_nil nil_is_Γ₁_append_Γ₂
+              rw [Γ₂_is_nil] at u₁_is_α
+              rw [Γ₂_is_nil] at nil_is_Γ₁_append_Γ₂
+              exact HasType.app f_is_fn (preservation u₁_is_α u₁_steps_u₂) nil_is_Γ₁_append_Γ₂
+    | @Step.app_lam x α e a => 
+        match e₁_is_τ with 
+        | @HasType.app _ Γ₁ Γ₂ _ _ _ β f_is_fn a_is_α nil_is_Γ₁_append_Γ₂ => 
+            match f_is_fn with 
+            | @HasType.lam _ _ _ _ _ x_fresh_in_Γ₁ bty => 
+                by
+                  let ⟨Γ₁_is_nil, Γ₂_is_nil⟩ := nil_append_nil_nil nil_is_Γ₁_append_Γ₂
+                  rw [←Γ₁_is_nil]
+                  exact subst_lemma x_fresh_in_Γ₁ (Or.inl bty) (Γ₂_is_nil ▸ a_is_α)
