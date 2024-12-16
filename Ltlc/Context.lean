@@ -5,6 +5,10 @@ import Ltlc.Types
 -- For AssocList
 open Lean
 
+def Lean.AssocList.length : AssocList α β → ℕ 
+  | AssocList.cons _ _ xs => 1 + AssocList.length xs
+  | AssocList.nil => 0
+
 notation "Context" => AssocList String LtlcType
 
 inductive Bound : String → Context → Prop
@@ -29,7 +33,8 @@ theorem incontext_is_bound
             exact incontext_is_bound inΓ'
 
 def context_equivalent (a b : Context) : Prop := 
-  (∀x, ∀α, InContext x α a → InContext x α b)
+  a.length = b.length 
+  ∧ (∀x, ∀α, InContext x α a → InContext x α b)
   ∧ (∀y, ∀β, InContext y β b → InContext y β a)
 
 -- cons basically becomes `insert` for the sake of easier to use.
@@ -48,20 +53,24 @@ instance : Setoid Context where
       by
         intro Γ₁ Γ₂
         simp [context_equivalent]
-        intro lefteq righteq
+        intro eql lefteq righteq
         apply And.intro
-        · assumption
-        · assumption
+        . exact Eq.symm eql
+        · apply And.intro
+          · assumption
+          · assumption
 
     trans := 
       by 
         intro Γ₁ Γ₂ Γ₃
         simp [context_equivalent]
-        intro leq12 req12
-        intro leq23 req23
+        intro eql12 leq12 req12
+        intro eql23 leq23 req23
         apply And.intro
-        · exact fun x α a => leq23 x α (leq12 x α (req12 x α (leq12 x α a)))
-        · exact fun y β a => req12 y β (leq12 y β (req12 y β (req23 y β a)))
+        · exact Eq.trans eql12 eql23
+        · apply And.intro
+          · exact fun x α a => leq23 x α (leq12 x α (req12 x α (leq12 x α a)))
+          · exact fun y β a => req12 y β (leq12 y β (req12 y β (req23 y β a)))
   }
 
 @[simp]
@@ -96,7 +105,7 @@ lemma nil_append_nil_nil {Γ₁ Γ₂ : Context} :
       | AssocList.nil => contradiction 
       | AssocList.cons x α xs => 
           simp [.≈., Setoid.r, context_equivalent] at equiv_append
-          let ⟨_, rhx⟩ := equiv_append
+          let ⟨_, ⟨_, rhx⟩⟩ := equiv_append
           let x_in_nil := rhx x α (mem_append_mem (InContext.aha x α xs))
           contradiction
     · by_contra notnil 
@@ -104,6 +113,6 @@ lemma nil_append_nil_nil {Γ₁ Γ₂ : Context} :
       | AssocList.nil => contradiction 
       | AssocList.cons y β ys => 
           simp [.≈., Setoid.r, context_equivalent] at equiv_append
-          let ⟨lhx, rhx⟩ := equiv_append
+          let ⟨_, ⟨lhx, rhx⟩⟩ := equiv_append
           let y_in_nili := rhx y β (InContext.aha y β _)
           contradiction
