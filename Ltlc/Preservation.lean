@@ -22,14 +22,83 @@ open Lean
 -- 
 -- theorem extract_context {α : LtlcType} (Γ : Context) (x : String) (x_in_Γ : x ∈ Γ)
 --   : ∃Γ', (.cons x α Γ') ≈ Γ := sorry
--- 
--- lemma equiv_context_replacable {Γ₁ Γ₂ : Context}
---   (t : HasType Γ₁ e α)
---   (Γ₁_equiv_Γ₂ : Γ₁ ≈ Γ₂)
---   : HasType Γ₂ e α := sorry
--- 
+
+lemma equiv_context_replacable {Γ₁ Γ₂ : Context}
+  (e_is_τ : HasType Γ₁ e τ)
+  (Γ₁_equiv_Γ₂ : Γ₁ ≈ Γ₂)
+  : HasType Γ₂ e τ := 
+    by
+      match e_is_τ with 
+      | @HasType.var x _ => 
+          rw [equiv_singleton_eq Γ₁_equiv_Γ₂]
+          exact HasType.var
+      | @HasType.app _ G H t u α β t_is_fn u_is_α is_append => 
+          let Γ₂_is_append : Γ₂ ≈ G ++ H := 
+            Trans.trans (symm Γ₁_equiv_Γ₂) is_append
+          exact HasType.app t_is_fn u_is_α Γ₂_is_append
+/-
+  | lam 
+    {Γ x α β body}
+    (x_fresh : ¬Bound x Γ)
+    (v_hastype : HasType (.cons x α Γ) body β)
+    : HasType Γ (LtlcTerm.lam x α body) (.arrow α β)
+-/
+      | @HasType.lam _ x α β body x_fresh v_hastype => 
+          apply HasType.lam
+          · by_contra hx
+            let x_not_fresh : Bound x Γ₁ := 
+              bound_equiv_replacable hx (symm Γ₁_equiv_Γ₂)
+            contradiction
+          · apply equiv_context_replacable v_hastype
+            let ⟨leneq, ⟨eq12, eq21⟩⟩ := Γ₁_equiv_Γ₂
+            apply And.intro
+            · simp [AssocList.length]
+              exact leneq
+            · apply And.intro
+              · intro s σ sσ_in_ctx
+                by_cases x_is_s : x = s
+                · simp [x_is_s]
+                  by_cases σ_is_α : σ = α
+                  · simp [σ_is_α]
+                    exact InContext.aha s α Γ₂
+                  · cases sσ_in_ctx with 
+                    | aha => contradiction
+                    | hang_on => 
+                        exact InContext.hang_on s σ s α Γ₂ (eq12 s σ (by assumption))
+                · cases sσ_in_ctx with 
+                  | aha => contradiction
+                  | hang_on => 
+                      exact InContext.hang_on s σ x α Γ₂ (eq12 s σ (by assumption))
+              · intro s σ sσ_in_ctx
+                by_cases x_is_s : x = s
+                · simp [x_is_s]
+                  by_cases σ_is_α : σ = α
+                  · simp [σ_is_α]
+                    exact InContext.aha s α Γ₁
+                  · cases sσ_in_ctx with 
+                    | aha => contradiction
+                    | hang_on => 
+                        exact InContext.hang_on s σ s α Γ₁ (eq21 s σ (by assumption))
+                · cases sσ_in_ctx with 
+                  | aha => contradiction
+                  | hang_on => 
+                      exact InContext.hang_on s σ x α Γ₁ (eq21 s σ (by assumption))
+            
+
 -- lemma cons_is_append_single {Γ : Context} {x : String} {α : LtlcType}
 --   : AssocList.cons x α Γ = Γ ++ (AssocList.cons x α AssocList.nil) := rfl
+
+-- theorem swapping_perserves
+--   (e_is_τ : HasType (.cons x α (.cons y β Γ)) e τ)
+--   (x_not_y : x ≠ y)
+--   : HasType (.cons y β (.cons x α Γ)) e τ := 
+--     by 
+--       match e_is_τ with
+--       | @HasType.lam _ m μ ν b m_fresh b_is_ν => 
+--           apply HasType.lam
+--           · sorry 
+--           · _
+--       | .app _ _ _ => sorry
 
 theorem subst_lemma {Γ x α β e a} 
   (x_fresh : ¬Bound x Γ)
@@ -86,7 +155,7 @@ theorem subst_lemma {Γ x α β e a}
                      · show HasType (AssocList.cons z γ Γ) ([x // a] d) μ
                        observe d2 : HasType (AssocList.cons z γ (AssocList.cons x α Γ)) d μ
                        have d2_swapped : HasType (AssocList.cons x α (AssocList.cons z γ Γ)) d μ 
-                        := sorry
+                        := equiv_context_replacable d2 swap_12_equiv
                        have x_still_fresh : ¬Bound x (AssocList.cons z γ Γ) := 
                           by
                             intro x_not_fresh_with_z
