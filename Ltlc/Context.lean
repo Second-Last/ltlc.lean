@@ -32,6 +32,14 @@ theorem incontext_is_bound
           · apply Bound.brb x y β Γ' hxy
             exact incontext_is_bound inΓ'
 
+theorem notbound_is_notincontext
+  (notbnd : ¬Bound x Γ)
+  : ¬InContext x α Γ :=
+    by
+      intro inctx
+      have bnd := incontext_is_bound inctx
+      contradiction
+
 def context_equivalent (a b : Context) : Prop := 
   a.length = b.length 
   ∧ (∀x, ∀α, InContext x α a → InContext x α b)
@@ -72,6 +80,57 @@ instance : Setoid Context where
           · exact fun x α a => leq23 x α (leq12 x α (req12 x α (leq12 x α a)))
           · exact fun y β a => req12 y β (leq12 y β (req12 y β (req23 y β a)))
   }
+
+theorem swap_12_equiv {Γ : Context} :
+  AssocList.cons x α (.cons y β Γ) ≈ .cons y β (.cons x α Γ) := by
+    apply And.intro
+    · aesop
+    · apply And.intro
+      · intro z γ z_in_ctx
+        match z_in_ctx with 
+        | .aha _ _ _ => 
+            apply InContext.hang_on z γ y β
+            exact InContext.aha z γ Γ
+        | .hang_on _ _ _ _ _ still_in_ctx => 
+            match still_in_ctx with 
+            | .aha _ _ _ => 
+                exact InContext.aha z γ (AssocList.cons x α Γ)
+            | .hang_on _ _ _ _ _ fin_in_ctx =>
+                apply InContext.hang_on z γ y β
+                apply InContext.hang_on z γ x α
+                exact fin_in_ctx
+      · intro z γ z_in_ctx
+        match z_in_ctx with 
+        | .aha _ _ _ => 
+            apply InContext.hang_on z γ x α
+            exact InContext.aha z γ Γ
+        | .hang_on _ _ _ _ _ still_in_ctx => 
+            match still_in_ctx with 
+            | .aha _ _ _ => 
+                exact InContext.aha z γ (AssocList.cons y β Γ)
+            | .hang_on _ _ _ _ _ fin_in_ctx =>
+                apply InContext.hang_on z γ x α
+                apply InContext.hang_on z γ y β
+                exact fin_in_ctx
+
+theorem bound_to_inctx (bnd : Bound x Γ) : ∃α, InContext x α Γ := 
+  by
+    match bnd with 
+    | .yochat _ τ Γ' => 
+        exact ⟨τ, InContext.aha x τ Γ'⟩
+    | .brb _ y β Γ' xnoty stillbnd => 
+        let ⟨τ, x_in_ctx⟩ := bound_to_inctx stillbnd
+        exact ⟨τ, InContext.hang_on x τ y β Γ' x_in_ctx⟩
+
+theorem bound_equiv_replacable {Γ₁ Γ₂ : Context}
+  (bnd : Bound x Γ₁)
+  (is_equiv : Γ₁ ≈ Γ₂)
+  : Bound x Γ₂ :=
+    by
+      let ⟨eqlen, ⟨eq12, eq21⟩⟩ := is_equiv
+      let ⟨α, x_inctx_Γ₁⟩ := bound_to_inctx bnd
+      let x_inctx_Γ₂ : InContext x α Γ₂ := eq12 x α x_inctx_Γ₁
+      exact incontext_is_bound x_inctx_Γ₂
 
 @[simp]
 instance : Append Context where
@@ -116,3 +175,28 @@ lemma nil_append_nil_nil {Γ₁ Γ₂ : Context} :
           let ⟨_, ⟨lhx, rhx⟩⟩ := equiv_append
           let y_in_nili := rhx y β (InContext.aha y β _)
           contradiction
+
+lemma equiv_singleton_eq {x : String} {α : LtlcType}
+  (equiv_singleton : AssocList.cons x α AssocList.nil ≈ Γ)
+  : Γ = AssocList.cons x α AssocList.nil
+  :=
+  by
+    match Γ with
+    | .nil => 
+        let ⟨leneq, _⟩ := equiv_singleton
+        simp [AssocList.length] at leneq
+    | .cons y β .nil =>
+        let x_is_y : x = y := by
+          by_contra x_not_y
+          let ⟨_, ⟨leq, req⟩⟩ := equiv_singleton
+          cases leq x α (InContext.aha x α AssocList.nil) with 
+          | _ => contradiction
+        let α_is_β : α = β := by 
+          by_contra α_not_β 
+          let ⟨_, ⟨leq, req⟩⟩ := equiv_singleton
+          cases leq x α (InContext.aha x α AssocList.nil) with 
+          | _ => contradiction
+        rw [x_is_y, α_is_β]
+    | .cons y β (.cons z γ rest) => 
+        let ⟨leneq, _⟩ := equiv_singleton
+        simp [AssocList.length] at leneq
