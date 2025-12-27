@@ -72,8 +72,7 @@ instance : Setoid Context where
       by 
         intro Γ₁ Γ₂ Γ₃
         simp [context_equivalent]
-        intro eql12 leq12 req12
-        intro eql23 leq23 req23
+        intro eql12 leq12 req12 eql23 leq23 req23
         apply And.intro
         · exact Eq.trans eql12 eql23
         · apply And.intro

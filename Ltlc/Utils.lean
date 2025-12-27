@@ -15,7 +15,3 @@ def List.All (p : α → Prop) (lst : List α) : Prop :=
 
 def Vector.zip3 {α : Type u} {β : Type v} {γ : Type w} {n : ℕ} (v1 : Vector α n) (v2 : Vector β n) (v3 : Vector γ n)
   : Vector (α × β × γ) n := Vector.zipWith Prod.mk v1 (Vector.zipWith Prod.mk v2 v3)
-
-def Vector.all {n : ℕ} (f : α → Prop) (lst : Vector α n) : Prop :=
-  match lst with
-  | ⟨lst, _⟩ => List.All f lst

@@ -153,16 +153,15 @@ theorem subst_lemma {Γ x α β e a}
                          := Bound.brb z x α Γ heq z_not_fresh_in_Γ
                        contradiction
                      · show HasType (AssocList.cons z γ Γ) ([x // a] d) μ
-                       observe d2 : HasType (AssocList.cons z γ (AssocList.cons x α Γ)) d μ
-                       have d2_swapped : HasType (AssocList.cons x α (AssocList.cons z γ Γ)) d μ 
-                        := equiv_context_replacable d2 swap_12_equiv
+                       have d_swapped : HasType (AssocList.cons x α (AssocList.cons z γ Γ)) d μ 
+                        := equiv_context_replacable d_hastype swap_12_equiv
                        have x_still_fresh : ¬Bound x (AssocList.cons z γ Γ) := 
                           by
                             intro x_not_fresh_with_z
                             cases x_not_fresh_with_z with 
                             | yochat => contradiction
                             | brb => contradiction
-                       exact subst_lemma x_still_fresh (Or.inl d2_swapped) p2
+                       exact subst_lemma x_still_fresh (Or.inl d_swapped) p2
            | inr pwox => 
                match pwox with 
                | @HasType.lam _ _ _ μ _ z_fresh d_hastype => 
